@@ -10,6 +10,7 @@
     "dev:mock": "node scripts/dev.mjs --mock",
     "setup:demo": "node scripts/dev.mjs --setup",
     "test:backend": "node scripts/dev.mjs --test",
+    "test:frontend": "node --experimental-strip-types --test tests/gamification.test.mjs",
     "check:openai": "node scripts/dev.mjs --check-ai",
     "build": "tsc -b && vite build",
     "preview": "vite preview"

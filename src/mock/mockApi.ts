@@ -1,4 +1,4 @@
-import type { CareerQuestApi, EmployeeListItem, EmployeeProfile, HRSummary, RecommendationsResponse } from '../api/types'
+import type { CareerQuestApi, CompletionResult, EmployeeListItem, EmployeeProfile, HRSummary, RecommendationsResponse } from '../api/types'
 
 const wait = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -11,7 +11,7 @@ const employeeRows: EmployeeListItem[] = [
   { employee_id: 'E0018', full_name: 'Aigerim Sarsenova', department: 'Product Management', role: 'Product Manager', grade: 'Middle' },
 ]
 
-const profileStore: Record<string, EmployeeProfile> = {
+const profileStore: Record<string, Omit<EmployeeProfile, 'development_summary'>> = {
   E0002: {
     ...employeeRows[0], tenure_months: 41, work_format: 'remote', preferred_language: 'ru', last_review_date: '2026-07-23', target: { role: 'Backend Engineer', grade: 'Senior' }, progress: 64,
     skills: [
@@ -72,11 +72,41 @@ const hrSummary: HRSummary = {
   employees_without_recommendations: [{ ...employeeRows[5], full_name: 'Aigerim Sarsenova' }, { employee_id: 'E0027', full_name: 'Daniyar Omarov', department: 'Sales', role: 'Sales Manager', grade: 'Senior' }, { employee_id: 'E0042', full_name: 'Mariya Petrova', department: 'Customer Support', role: 'Customer Support Specialist', grade: 'Lead' }],
 }
 
+// All events in these explicitly synthetic preview fixtures are voluntary.
+const previewDate = '2026-10-01'
+function previewSummary(profile: Omit<EmployeeProfile, 'development_summary'>) {
+  return {completed_unique_activities: new Set(profile.history.filter(row=>row.status==='completed' && row.date<=previewDate).map(row=>row.event_id)).size}
+}
+const previewReceipts = new Map<string, CompletionResult>()
+
 export const mockApi: CareerQuestApi = {
   async getEmployees() { await wait(250); return employeeRows },
-  async getEmployee(id) { await wait(400); const profile = profileStore[id]; if (!profile) throw new Error('Employee not found'); return structuredClone(profile) },
+  async getEmployee(id) { await wait(400); const profile = profileStore[id]; if (!profile) throw new Error('Employee not found'); return structuredClone({...profile, dataset_as_of:previewDate, development_summary:previewSummary(profile)}) },
   async getRecommendations(id) { await wait(1600); return structuredClone(recommendations[id] || { employee_id: id, recommendations: [] }) },
-  async completeActivity(id, eventId) { await wait(900); const profile = profileStore[id]; if (!profile) return; const activity = Object.values(recommendations).flatMap((item) => item.recommendations).find((item) => item.event_id === eventId); if (activity) { for (const impact of activity.skill_impacts) { const skill = profile.skills.find((item) => item.skill_id === impact.skill_id); if (skill) { skill.current = impact.after; skill.gap = Math.max(0, skill.required - skill.current) } } profile.progress = Math.min(100, (profile.progress ?? 0) + 12); profile.history = [{ record_id: `R-${Date.now()}`, event_id: eventId, title: activity.title, date: '2026-10-04', status: 'completed', completion_pct: 100, score: 88, feedback_rating: 5 }, ...profile.history]; if (recommendations[id]) recommendations[id].recommendations = recommendations[id].recommendations.filter((item) => item.event_id !== eventId) } },
+  async completeActivity(id, eventId, idempotencyKey) {
+    await wait(900)
+    const key=id+':'+eventId+':'+idempotencyKey
+    if(idempotencyKey && previewReceipts.has(key)) return structuredClone(previewReceipts.get(key)!)
+    const profile=profileStore[id]
+    const activity=recommendations[id]?.recommendations.find(item=>item.event_id===eventId)
+    if(!profile || !activity) throw new Error('Preview activity is no longer available')
+    const result:CompletionResult={progress_before:profile.progress,progress_after:profile.progress,updated_skills:[]}
+    for(const impact of activity.skill_impacts) {
+      const skill=profile.skills.find(item=>item.skill_id===impact.skill_id)
+      if(!skill)continue
+      const before=skill.current
+      skill.current=Math.max(before,impact.after)
+      skill.gap=Math.max(0,skill.required-skill.current)
+      if(skill.current>before)result.updated_skills.push({skill_id:skill.skill_id,skill_name:skill.name,before,after:skill.current})
+    }
+    profile.progress=profile.progress===null ? null : Math.min(100,profile.progress+12)
+    profile.history.unshift({record_id:crypto.randomUUID(),event_id:eventId,title:activity.title,date:previewDate,status:'completed',completion_pct:100})
+    recommendations[id].recommendations=recommendations[id].recommendations.filter(item=>item.event_id!==eventId)
+    result.progress_after=profile.progress
+    result.development_summary=previewSummary(profile)
+    if(idempotencyKey)previewReceipts.set(key,structuredClone(result))
+    return result
+  },
   async getHrSummary() { await wait(700); return structuredClone(hrSummary) },
   async importData({ employees, history }) { await wait(1100); return { imported_employees: employees ? 1 : 0, imported_history: history ? 12 : 0, message: 'Files validated and queued for import' } },
 }

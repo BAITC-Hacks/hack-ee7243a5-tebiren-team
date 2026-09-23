@@ -21,6 +21,7 @@ from .schemas import (
     RecommendationsResponse, ResetResponse, SkillGap, Target, UpdatedSkill,
 )
 from .services.hr import build_hr_summary, employees_without_step
+from .services.development import development_summary
 from .services.import_service import ImportValidationError, parse_csv_text, parse_import
 from .services.runtime_state import RuntimeState
 
@@ -119,6 +120,7 @@ def create_app(db_path: str | None = None):
             target=_target(c['target']), effective_skills=c['skills'], required_target_skills=profile.get('required_skills', {}) if profile else {},
             skill_gaps=[SkillGap(**g) for g in c['gaps']], critical_skills=profile.get('critical_skills', []) if profile else [],
             career_progress=c['progress'], recent_activity_history=history, dataset_as_of=AS_OF_DATE.isoformat(),
+            development_summary=development_summary(snapshot, employee_id),
         )
 
     @app.post('/api/employees/{employee_id}/recommendations', response_model=RecommendationsResponse)
@@ -155,6 +157,7 @@ def create_app(db_path: str | None = None):
             after = build_employee_context(runtime, employee_id)
             response = CompleteResponse(success=True, employee_id=employee_id, event_id=body.event_id,
                                         progress_before=before['progress'], progress_after=after['progress'],
+                                        development_summary=development_summary(runtime, employee_id),
                                         updated_skills=[UpdatedSkill(skill_id=sid, skill_name=runtime.skills_by_id[sid]['name'], before=before['skills'].get(sid, 0), after=value)
                                                         for sid, value in sorted(after['skills'].items()) if value != before['skills'].get(sid, 0)])
             if scope:

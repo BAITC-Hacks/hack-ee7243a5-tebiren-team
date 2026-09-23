@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from '../api/client'
-import type { EmployeeProfile, Recommendation } from '../api/types'
+import type { CompletionResult, EmployeeProfile, Recommendation } from '../api/types'
+import { Achievements } from '../components/employee/Achievements'
+import { CompletionCelebration } from '../components/employee/CompletionCelebration'
+import { confirmedCount, unlockedAchievements, validDevelopmentSummary } from '../gamification/achievements'
 import { LoadingState, EmptyState } from '../components/common/States'
 import { EmployeeHeader } from '../components/employee/EmployeeHeader'
 import { CareerPath } from '../components/employee/CareerPath'
@@ -19,11 +22,12 @@ export function EmployeePage({selectedId}: {selectedId:string}) {
   const [profileError,setProfileError]=useState('')
   const [actionError,setActionError]=useState('')
   const [completing,setCompleting]=useState(false)
-  const [success,setSuccess]=useState('')
+  const [success,setSuccess]=useState<{key:string; result?:CompletionResult; unlocked:string[]}|null>(null)
   const alive=useRef(true)
   const profileRequest=useRef(0)
   const actionBusy=useRef(false)
   const requestKeys=useRef<Record<string,string>>({})
+  const celebratedRequests=useRef(new Set<string>())
 
   async function loadProfile() {
     const token=++profileRequest.current
@@ -50,18 +54,23 @@ export function EmployeePage({selectedId}: {selectedId:string}) {
     finally{actionBusy.current=false;if(alive.current)setFinding(false)}
   }
   async function complete(eventId:string) {
-    if(actionBusy.current)return
-    actionBusy.current=true;setCompleting(true);setActionError('');setSuccess('')
-    requestKeys.current[eventId] ||= crypto.randomUUID()
+    if(actionBusy.current || !employee)return
+    actionBusy.current=true;setCompleting(true);setActionError('');setSuccess(null)
+    const actionKey=requestKeys.current[eventId] ||= crypto.randomUUID()
     let saved=false
     try {
-      const result=await api.completeActivity(selectedId,eventId,requestKeys.current[eventId])
+      const result=(await api.completeActivity(selectedId,eventId,actionKey)) || undefined
       saved=true
       delete requestKeys.current[eventId]
       if(!alive.current)return
       setRecommendations([])
-      const changes=result?.updated_skills.map(s=>(s.skill_name||s.skill_id)+': '+s.before+' → '+s.after).join('; ')
-      setSuccess('Activity completed. '+(changes || 'Your learning history was updated.')+(result?.progress_after!=null ? ' Readiness: '+result.progress_before+'% → '+result.progress_after+'%.' : ''))
+      const before=employee.development_summary.completed_unique_activities
+      const after=validDevelopmentSummary(result?.development_summary) ? result.development_summary.completed_unique_activities : undefined
+      setEmployee(current=>current ? {...current, development_summary:{completed_unique_activities:confirmedCount(current.development_summary.completed_unique_activities,result)}} : current)
+      if(!celebratedRequests.current.has(actionKey)) {
+        celebratedRequests.current.add(actionKey)
+        setSuccess({key:actionKey,result,unlocked:unlockedAchievements(before,after)})
+      }
       await loadProfile()
       await refreshRecommendations()
     } catch(e) {
@@ -72,9 +81,9 @@ export function EmployeePage({selectedId}: {selectedId:string}) {
   return <div className="page-wrap">
     <div className="page-intro"><div><div className="eyebrow dark">EMPLOYEE JOURNEY <span className="live-dot"/> LIVE PROFILE</div><p className="intro-copy">A clear next step for where you want to go.</p></div>{employee.dataset_as_of&&<span className="as-of">Dataset as of {employee.dataset_as_of}</span>}</div>
     <EmployeeHeader employee={employee}/>
-    {success&&<div role="status" className="notice success-notice">{success}</div>}
+    {success&&<CompletionCelebration key={success.key} result={success.result} unlocked={success.unlocked}/>}
     {(actionError||profileError)&&<div role="alert" className="notice error-notice">{actionError||profileError}<button className="text-button" disabled={completing||finding} onClick={()=>{void loadProfile().catch(()=>{});void find()}}>Refresh data</button></div>}
-    <div className="journey-grid"><div className="journey-main"><CareerPath employee={employee}/><ProgressIndicator employee={employee}/><SkillGapList skills={employee.skills}/></div>
+    <div className="journey-grid"><div className="journey-main"><CareerPath employee={employee}/><ProgressIndicator employee={employee}/><Achievements count={employee.development_summary.completed_unique_activities}/><SkillGapList skills={employee.skills}/></div>
       <aside className="journey-side"><div className="next-step-heading"><div><div className="section-kicker">DEVELOPMENT PLAN</div><h2>Your next step</h2></div><Sparkle size={20}/></div>
         <div className="recommendation-panel">{finding||completing?<LoadingState label={completing ? "Saving activity and refreshing your journey…" : "Reviewing your target, skills and participation history…"}/>:recommendations.length?<div className="recommendation-list">{recommendations.map(r=><RecommendationCard key={r.event_id} recommendation={r} onComplete={()=>void complete(r.event_id)} completing={completing}/>)}</div>:actionError?<EmptyState title="Could not refresh your next steps" detail="Use Refresh data above to try again. Saved completions are kept."/>:requested?<EmptyState title="No next step available" detail={reason} action={<button className="text-button" disabled={completing} onClick={()=>void find()}>Check again</button>}/>:<div className="find-cta"><div className="cta-icon"><Sparkle size={22}/></div><h3>Make your progress practical</h3><p>Get 1–3 development activities matched to your target role and the skills that matter most.</p><button className="primary-button full-button" disabled={completing} onClick={()=>void find()}>Find my next step <Sparkle size={16}/></button><span className="cta-note">Explainable recommendations</span></div>}</div>
       </aside></div><ActivityHistory history={employee.history}/>

@@ -1,6 +1,7 @@
 import type { ActivityHistoryItem, CareerQuestApi, EmployeeListItem, EmployeeProfile, HRSummary, ImportResult, ParticipationSummary, Recommendation, RecommendationsResponse, SkillGap, SkillImpact } from './types'
 import { mockApi } from '../mock/mockApi'
 import type { SessionUser, EmployeePageResult, NoStepEmployee, CompletionResult } from './types'
+import { validDevelopmentSummary } from '../gamification/achievements'
 
 const baseUrl = import.meta.env.VITE_API_URL || ''
 export const useMocks = import.meta.env.VITE_USE_MOCKS === 'true'
@@ -39,6 +40,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 interface RawEmployeeProfile extends EmployeeListItem {
+  development_summary?: unknown
   dataset_as_of?: string
   department?: string
   tenure_months: number
@@ -114,6 +116,9 @@ function normalizeEmployee(raw: RawEmployeeProfile): EmployeeProfile {
       !Array.isArray(raw.recent_activity_history) || !Object.hasOwn(raw, 'career_progress')) {
     throw new Error('Invalid profile response. Check that frontend and backend versions match.')
   }
+  if (!validDevelopmentSummary(raw.development_summary)) {
+    throw new Error('Achievement data is missing or invalid. Restart the updated backend and retry.')
+  }
   const criticalIds = new Set(raw.critical_skills || [])
   const skills: SkillGap[] = (raw.skill_gaps || []).map((skill) => ({
     skill_id: skill.skill_id,
@@ -136,6 +141,7 @@ function normalizeEmployee(raw: RawEmployeeProfile): EmployeeProfile {
   const target = raw.target || raw.career_goal
   return {
     dataset_as_of: raw.dataset_as_of,
+    development_summary: raw.development_summary,
     employee_id: raw.employee_id,
     full_name: raw.full_name,
     department: raw.department,

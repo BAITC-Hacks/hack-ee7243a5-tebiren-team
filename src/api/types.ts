@@ -33,7 +33,12 @@ export interface ActivityHistoryItem {
   feedback_rating?: number
 }
 
+export interface DevelopmentSummary {
+  completed_unique_activities: number
+}
+
 export interface EmployeeProfile extends EmployeeListItem {
+  development_summary: DevelopmentSummary
   dataset_as_of?: string
   tenure_months: number
   work_format?: string
@@ -132,6 +137,7 @@ export interface CareerQuestApi {
 }
 
 export interface CompletionResult {
+  development_summary?: DevelopmentSummary | null
   progress_before: number | null
   progress_after: number | null
   updated_skills: Array<{ skill_id: string; skill_name?: string; before: number; after: number }>

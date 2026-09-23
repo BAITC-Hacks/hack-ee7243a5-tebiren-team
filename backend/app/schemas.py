@@ -54,6 +54,10 @@ class EmployeeListResponse(BaseModel):
     offset: int = 0
 
 
+class DevelopmentSummary(BaseModel):
+    completed_unique_activities: int = Field(ge=0)
+
+
 class EmployeeDetail(BaseModel):
     employee_id: str
     full_name: str
@@ -71,6 +75,7 @@ class EmployeeDetail(BaseModel):
     career_progress: float | None
     recent_activity_history: list[ActivityHistoryItem]
     dataset_as_of: str
+    development_summary: DevelopmentSummary
 
 
 class ScoreBreakdown(BaseModel):
@@ -126,6 +131,8 @@ class CompleteResponse(BaseModel):
     progress_before: float | None
     progress_after: float | None
     updated_skills: list[UpdatedSkill]
+    # Idempotency responses saved by earlier versions lack this field.
+    development_summary: DevelopmentSummary | None = None
 
 
 class HealthResponse(BaseModel):

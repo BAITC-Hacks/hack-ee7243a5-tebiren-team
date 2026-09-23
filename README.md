@@ -1,4 +1,7 @@
 # Career Quest
+
+[Қазақша](README.kk.md) · [English](README.en.md) · **Русский**
+
 ### Понятный следующий шаг в карьере
 
 **HackAlem AI · команда Tebiren · работающий full-stack MVP**

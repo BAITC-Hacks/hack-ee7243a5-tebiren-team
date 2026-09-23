@@ -1,57 +1,55 @@
-from __future__ import annotations
-
 from collections import Counter, defaultdict
-from typing import Any
 
+from ..config import AS_OF_DATE
+from ..data_loader import VALID_STATUSES
 from ..recommendation.engine import recommendations
 
 
-def build_hr_summary(state: Any) -> dict[str, Any]:
-    grade_distribution = Counter(employee["grade"] for employee in state.employees.values())
-    gap_employees: dict[str, set[str]] = defaultdict(set)
-    critical_employees: dict[str, set[str]] = defaultdict(set)
-    closest: list[dict[str, Any]] = []
-    no_recommendations = 0
-    for employee_id in sorted(state.employees):
-        result = recommendations(state, employee_id, max_recommendations=1, enrich_explanations=False)
-        if not result["recommendations"]:
-            no_recommendations += 1
-        for gap in result["gaps"]:
-            if gap["gap"] > 0:
-                gap_employees[gap["skill_id"]].add(employee_id)
-                if gap["critical"]:
-                    critical_employees[gap["skill_id"]].add(employee_id)
-        if result["progress"] is not None:
-            closest.append({
-                "employee_id": employee_id,
-                "full_name": result["employee"]["full_name"],
-                "progress": result["progress"],
-                "target": result["target"],
-            })
-    closest.sort(key=lambda item: (-item["progress"], item["employee_id"]))
-    status_counts = Counter(row["status"] for row in state.history)
-    unique_participants = len({row["employee_id"] for row in state.history})
-    total_records = len(state.history)
-    participation = {
-        "total_records": total_records,
-        "unique_participants": unique_participants,
-        "status_counts": dict(sorted(status_counts.items())),
-        "completion_rate": round(status_counts.get("completed", 0) / total_records * 100, 1) if total_records else 0.0,
-    }
-    gaps = []
-    for skill_id, employee_ids in gap_employees.items():
-        gaps.append({
-            "skill_id": skill_id,
-            "skill_name": state.skills_by_id.get(skill_id, {}).get("name", skill_id),
-            "employees": len(employee_ids),
-            "critical_for_target": len(critical_employees.get(skill_id, set())),
-        })
-    gaps.sort(key=lambda item: (-item["employees"], -item["critical_for_target"], item["skill_id"]))
+def employees_without_step(state):
+    rows = []
+    for eid, employee in sorted(state.employees.items()):
+        result = recommendations(state, eid, max_recommendations=1, enrich_explanations=False)
+        if not result['recommendations']:
+            rows.append({**{k: employee[k] for k in ('employee_id', 'full_name', 'role', 'grade')},
+                         'target': result['target'], 'reason': result['reason'], 'reason_code': result['reason_code']})
+    return rows
+
+
+def build_hr_summary(state):
+    gap_employees, critical_employees = defaultdict(set), defaultdict(set)
+    closest = []
+    no_steps = 0
+    for eid in sorted(state.employees):
+        result = recommendations(state, eid, max_recommendations=1, enrich_explanations=False)
+        no_steps += not bool(result['recommendations'])
+        for gap in result['gaps']:
+            if gap['gap'] > 0:
+                gap_employees[gap['skill_id']].add(eid)
+                if gap['critical']:
+                    critical_employees[gap['skill_id']].add(eid)
+        if result['progress'] is not None:
+            closest.append({'employee_id': eid, 'full_name': result['employee']['full_name'], 'progress': result['progress'], 'target': result['target']})
+    history = [r for r in state.history if r['date'] <= AS_OF_DATE.isoformat()]
+    status = Counter(r['status'] for r in history)
+    per_event, participants = defaultdict(Counter), defaultdict(set)
+    for row in history:
+        per_event[row['event_id']][row['status']] += 1
+        participants[row['event_id']].add(row['employee_id'])
+    gaps = [{'skill_id': sid, 'skill_name': state.skills_by_id[sid]['name'], 'employees': len(ids),
+             'critical_for_target': len(critical_employees[sid])} for sid, ids in gap_employees.items()]
+    gaps.sort(key=lambda x: (-x['employees'], x['skill_id']))
     return {
-        "total_employees": len(state.employees),
-        "grade_distribution": dict(sorted(grade_distribution.items())),
-        "most_common_unresolved_target_gaps": gaps[:10],
-        "participation": participation,
-        "employees_with_no_valid_next_step": no_recommendations,
-        "closest_to_target": closest[:10],
+        'total_employees': len(state.employees),
+        'grade_distribution': dict(Counter(e['grade'] for e in state.employees.values())),
+        'most_common_unresolved_target_gaps': gaps[:10],
+        'participation': {
+            'total_records': len(history), 'unique_participants': len({r['employee_id'] for r in history}),
+            'status_counts': dict(status), 'completion_rate': round(status['completed'] / len(history) * 100, 1) if history else 0,
+        },
+        'employees_with_no_valid_next_step': no_steps,
+        'closest_to_target': sorted(closest, key=lambda x: (-x['progress'], x['employee_id']))[:10],
+        'activity_participation': [
+            {'event_id': e['event_id'], 'title': e['title'], 'unique_participants': len(participants[e['event_id']]),
+             **{s: per_event[e['event_id']][s] for s in sorted(VALID_STATUSES)}} for e in state.dataset.events
+        ],
     }

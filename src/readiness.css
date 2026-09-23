@@ -1,0 +1,31 @@
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #e9f0e9; }
+.login-card { width: min(100%, 460px); padding: 38px; display: grid; gap: 20px; }
+.login-card h1 { font-size: 30px; letter-spacing: -1px; line-height: 1.15; }
+.login-card label { display: grid; gap: 8px; font-size: 13px; color: #335d51; }
+.login-card input { width: 100%; padding: 12px; border: 1px solid #bfd0c7; border-radius: 8px; background: white; }
+.login-card p, .login-card small { color: #5c736a; line-height: 1.5; }
+.notice { padding: 14px 18px; border: 1px solid #b7cdbf; border-radius: 10px; margin: 12px 0; background: #edf5ef; line-height: 1.5; font-size: 13px; overflow-wrap: anywhere; }
+.notice button { margin: 8px; }
+.error-notice { color: #8a2c27; background: #fff1ee; border-color: #e6b6ac; }
+.success-notice { color: #235b3f; background: #e9f6e7; }
+.audit-section { padding: 24px; margin-top: 20px; min-width: 0; }
+.audit-section h2, .participation-card h2 { font-size: 20px; margin: 8px 0 14px; }
+.audit-section > p, .participation-card > p { font-size: 13px; line-height: 1.5; color: #62796f; }
+.table-scroll { overflow: auto; max-height: 550px; margin-top: 20px; }
+.data-table { border-collapse: collapse; width: 100%; font-size: 12px; text-align: left; }
+.data-table th, .data-table td { padding: 12px 14px; border-bottom: 1px solid #e3ebe6; }
+.data-table th { background: #eef5ef; position: sticky; top: 0; color: #426a5a; white-space: nowrap; }
+.data-table td:first-child { min-width: 200px; }
+.data-table small { display: block; color: #6e847a; margin-top: 4px; }
+.no-step-list { margin-top: 16px; }
+.profile-link { width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 10px; border-bottom: 1px solid #e2ebe4; background: transparent; }
+.profile-link:hover { background: #f0f6ef; }
+.profile-link strong, .profile-link span { display: block; }
+.profile-link div > span, .profile-link p { color: #71857c; font-size: 12px; margin-top: 6px; }
+.pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; font-size: 12px; }
+.progress-help { margin-top: 10px; font-size: 12px; color: #c5d9cf; }
+.progress-help summary { cursor: pointer; }
+.progress-help p { max-width: none; line-height: 1.5; margin-top: 10px; }
+.topbar-left { min-width: 0; }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #22877a; outline-offset: 3px; }
+@media(max-width: 760px) { .login-card { padding: 25px; } .audit-section { padding: 16px; } .profile-link { align-items: flex-start; } .pagination { gap: 8px; } }

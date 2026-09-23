@@ -6,6 +6,11 @@ from typing import Any, Iterable
 from ..config import AS_OF_DATE, MAX_PROFICIENCY, REPEATABLE_EVENT_IDS
 
 
+def apply_gain(before: int, gain: int, maximum: int) -> int:
+    """An activity's ceiling limits growth, never an existing proficiency."""
+    return max(before, min(MAX_PROFICIENCY, maximum, before + gain))
+
+
 def effective_skills(
     employee: dict[str, Any],
     history: Iterable[dict[str, Any]],
@@ -20,10 +25,12 @@ def effective_skills(
             for row in history
             if row["employee_id"] == employee["employee_id"]
             and row["status"] == "completed"
-            and date.fromisoformat(row["date"]) > review_date
+            and (date.fromisoformat(row["date"]) > review_date or (row.get('runtime_completion') and date.fromisoformat(row["date"]) == review_date))
             and date.fromisoformat(row["date"]) <= AS_OF_DATE
         ),
-        key=lambda row: (row["date"], row["record_id"]),
+        # Preserve actual completion order within the snapshot day. UUID lexical
+        # order can otherwise change the effect of different activity ceilings.
+        key=lambda row: (row["date"], bool(row.get('runtime_completion')), row.get('runtime_order', 0), row["record_id"]),
     )
     applied_non_repeatable: set[str] = set()
     for row in rows:
@@ -37,11 +44,7 @@ def effective_skills(
         for item in event.get("develops_skills", []):
             skill_id = item["skill_id"]
             before = skills.get(skill_id, 0)
-            skills[skill_id] = min(
-                MAX_PROFICIENCY,
-                int(item.get("max_level", MAX_PROFICIENCY)),
-                before + int(item.get("gain", 0)),
-            )
+            skills[skill_id] = apply_gain(before, int(item.get("gain", 0)), int(item.get("max_level", MAX_PROFICIENCY)))
     return skills
 
 

@@ -1,0 +1,4 @@
+record_id,employee_id,event_id,date,due_date,status,completion_pct,score,feedback_rating,assigned_by
+JURY_HISTORY_1,E9001,EV_036,2026-08-01,,no_show,0,,,self
+JURY_HISTORY_2,E9001,EV_036,2026-09-01,,no_show,0,,,self
+JURY_HISTORY_3,E9001,EV_036,2026-09-15,,no_show,0,,,self

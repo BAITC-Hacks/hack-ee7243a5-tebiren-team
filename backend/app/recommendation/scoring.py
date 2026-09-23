@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..config import SCORE_WEIGHTS
+from ..services.progress import apply_gain
 
 
 def clamp(value: float) -> float:
@@ -61,7 +62,7 @@ def score_event(
         if not gap:
             continue
         before = skills.get(item["skill_id"], 0)
-        after = min(before + int(item.get("gain", 0)), int(item.get("max_level", 5)), 5)
+        after = apply_gain(before, int(item.get("gain", 0)), int(item.get("max_level", 5)))
         effective_gain = max(0, min(after - before, gap["gap"]))
         if effective_gain <= 0:
             continue

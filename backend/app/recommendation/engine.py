@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
+from collections import Counter
 from typing import Any
 
 from ..config import AS_OF_DATE, GRADE_ORDER, REPEATABLE_EVENT_IDS
 from ..services.progress import career_progress, effective_skills
-from .explainer import OpenAIExplainer, deterministic_reasons
+from .explainer import OpenAIExplainer
 from .scoring import CandidateScore, score_event
 
 
@@ -90,7 +91,7 @@ def build_employee_context(state: Any, employee_id: str) -> dict[str, Any]:
         "skills": skills,
         "gaps": gaps,
         "progress": career_progress(target_profile, skills),
-        "history": state.employee_history(employee_id),
+        "history": [row for row in state.employee_history(employee_id) if row['date'] <= AS_OF_DATE.isoformat()],
     }
 
 
@@ -105,9 +106,9 @@ def recommendations(
     candidates: list[CandidateScore] = []
     target_gap_ids = {gap["skill_id"] for gap in context["gaps"] if gap["gap"] > 0}
     if not context["target"]:
-        return {**context, "recommendations": [], "reason": "No promotion target is defined for this employee"}
+        return {**context, "recommendations": [], "reason_code": "no_target", "reason": "No promotion target is defined for this employee"}
     if not target_gap_ids:
-        return {**context, "recommendations": [], "reason": "The employee currently meets all target skill requirements"}
+        return {**context, "recommendations": [], "reason_code": "target_met", "reason": "The employee currently meets all target skill requirements"}
     for event in state.dataset.events:
         eligible, _ = _event_is_eligible(
             context["employee"], event, context["skills"], context["history"], for_recommendation=True
@@ -136,20 +137,29 @@ def recommendations(
                 **impact,
                 "skill_name": state.skills_by_id.get(impact["skill_id"], {}).get("name", impact["skill_id"]),
             })
-        completed_like = [row for row in context["history"] if row["event_id"] == event["event_id"] and row["status"] == "completed"]
-        history_note = None
-        if completed_like:
-            history_note = "The employee has completed a related activity before, so this is a repeatable next step"
-        elif any(row["status"] == "completed" for row in context["history"]):
-            history_note = "The employee's activity history includes successful completions"
         target_note = f"The activity is eligible for the current {context['employee']['role']} {context['employee']['grade']}"
+        similar = [row for row in context['history'] if (past := state.events_by_id.get(row['event_id'])) and (past.get('type') == event.get('type') or past.get('format') == event.get('format'))]
+        counts = Counter(row['status'] for row in similar)
+        history_note = ('No participation history in activities of the same type or format.' if not similar else
+                        f"Same type or format: {counts['completed']} completed, {counts['no_show']} missed, {counts['declined']} declined, {counts['dropped']} dropped, {counts['in_progress']} in progress, {counts['overdue']} overdue.")
+        evidence = [
+            {'id': 'current', 'factor': 'current_grade', 'text': target_note},
+            {'id': 'target', 'factor': 'target_requirements', 'text': f"Your target is {context['target']['role']} ({context['target']['grade']}). " + ('This activity develops a critical target skill.' if any(x['critical'] for x in impacts) else 'This activity develops a required target skill.')},
+            {'id': 'gaps', 'factor': 'skill_gaps', 'text': '; '.join(f"{x['skill_name']}: {x['before']} now, {x['required']} required; after completion {x['after_if_completed']}" for x in impacts)},
+            {'id': 'history', 'factor': 'participation_history', 'text': history_note},
+        ]
         item = {
             "rank": rank,
             "event_id": event["event_id"],
             "title": event["title"],
             "score": candidate.score,
             "score_breakdown": candidate.breakdown,
-            "reasons": deterministic_reasons({"impacts": impacts, "history_note": history_note, "target_note": target_note}),
+            "reasons": [fact['text'] for fact in evidence],
+            "evidence": evidence,
+            "type": event.get('type'),
+            "format": event.get('format'),
+            "duration_hours": event.get('duration_hours'),
+            "next_session": min((day for day in event.get('upcoming_sessions', []) if day >= AS_OF_DATE.isoformat()), default=None),
             "explanation": None,
             "skill_impacts": [
                 {
@@ -172,6 +182,7 @@ def recommendations(
             "impacts": impacts,
             "score_breakdown": candidate.breakdown,
             "history_note": history_note,
+            "evidence": evidence,
         })
     if enrich_explanations:
         try:
@@ -183,9 +194,8 @@ def recommendations(
     for item in rendered:
         if item["event_id"] in llm:
             item["explanation"] = llm[item["event_id"]]["explanation"]
-            item["reasons"] = llm[item["event_id"]]["reasons"] or item["reasons"]
             item["explanation_source"] = "openai"
-    return {**context, "recommendations": rendered, "reason": None if rendered else "No eligible development activity addresses the unresolved target gaps"}
+    return {**context, "recommendations": rendered, "reason_code": None if rendered else 'no_eligible_activity', "reason": None if rendered else "No eligible development activity addresses the unresolved target gaps"}
 
 
 def event_is_eligible_for_completion(state: Any, employee_id: str, event_id: str) -> tuple[bool, str | None]:

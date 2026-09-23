@@ -34,6 +34,7 @@ export interface ActivityHistoryItem {
 }
 
 export interface EmployeeProfile extends EmployeeListItem {
+  dataset_as_of?: string
   tenure_months: number
   work_format?: string
   preferred_language?: string
@@ -56,6 +57,8 @@ export interface SkillImpact {
 }
 
 export interface Recommendation {
+  rank?: number
+  evidence?: Array<{ id: string; factor: string; text: string }>
   event_id: string
   title: string
   description?: string
@@ -72,6 +75,8 @@ export interface Recommendation {
 }
 
 export interface RecommendationsResponse {
+  reason?: string | null
+  reason_code?: string | null
   employee_id: string
   recommendations: Recommendation[]
 }
@@ -83,6 +88,7 @@ export interface HRSkillGap {
 }
 
 export interface ActivityParticipation {
+  unique_participants?: number
   event_id: string
   title: string
   completed: number
@@ -109,6 +115,8 @@ export interface ParticipationSummary {
 }
 
 export interface ImportResult {
+  imported_employee_ids?: string[]
+  warnings?: string[]
   imported_employees?: number
   imported_history?: number
   message?: string
@@ -118,7 +126,33 @@ export interface CareerQuestApi {
   getEmployees(): Promise<EmployeeListItem[]>
   getEmployee(id: string): Promise<EmployeeProfile>
   getRecommendations(id: string): Promise<RecommendationsResponse>
-  completeActivity(id: string, eventId: string): Promise<void>
+  completeActivity(id: string, eventId: string, idempotencyKey?: string): Promise<CompletionResult | void>
   getHrSummary(): Promise<HRSummary>
   importData(files: { employees: File | null; history: File | null }): Promise<ImportResult>
+}
+
+export interface CompletionResult {
+  progress_before: number | null
+  progress_after: number | null
+  updated_skills: Array<{ skill_id: string; skill_name?: string; before: number; after: number }>
+}
+
+export interface SessionUser {
+  username: string
+  role: 'hr' | 'employee'
+  employee_id: string | null
+  csrf_token: string
+}
+
+export interface EmployeePageResult {
+  employees: EmployeeListItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface NoStepEmployee extends EmployeeListItem {
+  target?: CareerTarget | null
+  reason: string
+  reason_code?: string
 }

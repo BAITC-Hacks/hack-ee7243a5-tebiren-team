@@ -1,4 +1,10 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
+backend/var/
+backend/API key.txt
+*.sqlite3*
+test-results/
 .DS_Store

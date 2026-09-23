@@ -49,6 +49,9 @@ class EmployeeSummary(BaseModel):
 
 class EmployeeListResponse(BaseModel):
     employees: list[EmployeeSummary]
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
 
 
 class EmployeeDetail(BaseModel):
@@ -67,6 +70,7 @@ class EmployeeDetail(BaseModel):
     critical_skills: list[str]
     career_progress: float | None
     recent_activity_history: list[ActivityHistoryItem]
+    dataset_as_of: str
 
 
 class ScoreBreakdown(BaseModel):
@@ -87,6 +91,11 @@ class Recommendation(BaseModel):
     explanation: str | None = None
     skill_impacts: list[SkillImpact]
     explanation_source: str
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+    type: str | None = None
+    format: str | None = None
+    duration_hours: float | None = None
+    next_session: str | None = None
 
 
 class RecommendationsResponse(BaseModel):
@@ -96,6 +105,7 @@ class RecommendationsResponse(BaseModel):
     skill_gaps: list[SkillGap]
     recommendations: list[Recommendation]
     reason: str | None = None
+    reason_code: str | None = None
 
 
 class CompleteRequest(BaseModel):
@@ -104,6 +114,7 @@ class CompleteRequest(BaseModel):
 
 class UpdatedSkill(BaseModel):
     skill_id: str
+    skill_name: str | None = None
     before: int
     after: int
 
@@ -122,6 +133,7 @@ class HealthResponse(BaseModel):
     dataset_loaded: bool
     employees: int
     openai_enabled: bool
+    dataset_as_of: str
 
 
 class ResetResponse(BaseModel):
@@ -133,6 +145,7 @@ class ImportResponse(BaseModel):
     employees_added: int
     history_rows_added: int
     warnings: list[str]
+    imported_employee_ids: list[str] = Field(default_factory=list)
 
 
 class RecommendationRequest(BaseModel):
@@ -160,6 +173,7 @@ class HRSummary(BaseModel):
     participation: ParticipationStats
     employees_with_no_valid_next_step: int
     closest_to_target: list[dict[str, Any]]
+    activity_participation: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ImportPayload(BaseModel):
